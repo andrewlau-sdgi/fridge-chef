@@ -119,6 +119,112 @@ _RECIPE_AUDIO_CONTROLS = st.components.v2.component(
     """,
 )
 
+_RECIPE_PDF_EXPORT = st.components.v2.component(
+    "recipe_pdf_export",
+    html='<button id="export-pdf" type="button"></button>',
+    css="""
+    #export-pdf {
+        color: white;
+        background: #ff4b4b;
+        border: 0;
+        border-radius: 0.4rem;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+    }
+    """,
+    js="""
+    export default function ({ data, parentElement }) {
+        const button = parentElement.querySelector("#export-pdf");
+        if (!button) return;
+
+        button.textContent = data.buttonLabel;
+        button.onclick = () => {
+            const printWindow = window.open("", "_blank");
+            if (!printWindow) {
+                window.alert(data.popupBlocked);
+                return;
+            }
+
+            const document = printWindow.document;
+            document.open();
+            document.write(`<!doctype html>
+                <html lang="${data.language}">
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1">
+                        <title></title>
+                        <style>
+                            @page { size: A4; margin: 18mm; }
+                            body {
+                                color: #111;
+                                font-family: Arial, "Noto Sans CJK TC", sans-serif;
+                                line-height: 1.5;
+                                margin: 0 auto;
+                                max-width: 800px;
+                            }
+                            h1 { font-size: 1.5rem; }
+                            img {
+                                display: block;
+                                height: auto;
+                                max-height: 70vh;
+                                max-width: 100%;
+                                object-fit: contain;
+                                margin: 1rem auto;
+                            }
+                            pre {
+                                font-family: inherit;
+                                font-size: 11pt;
+                                white-space: pre-wrap;
+                                overflow-wrap: anywhere;
+                            }
+                            @media print {
+                                body { max-width: none; }
+                                img { break-inside: avoid; }
+                            }
+                        </style>
+                    </head>
+                    <body></body>
+                </html>`);
+            document.close();
+            document.documentElement.lang = data.language;
+            document.title = data.title;
+
+            const heading = document.createElement("h1");
+            heading.textContent = data.title;
+            document.body.appendChild(heading);
+
+            let hasPrinted = false;
+            const printDocument = () => {
+                if (hasPrinted) return;
+                hasPrinted = true;
+                printWindow.focus();
+                printWindow.print();
+            };
+            let image;
+            if (data.image) {
+                image = document.createElement("img");
+                image.alt = data.imageAlt;
+                document.body.appendChild(image);
+            }
+
+            const recipe = document.createElement("pre");
+            recipe.textContent = data.recipe;
+            document.body.appendChild(recipe);
+            if (image) {
+                image.onload = printDocument;
+                image.onerror = printDocument;
+                image.src = data.image;
+                if (image.complete) printDocument();
+            } else {
+                printDocument();
+            }
+        };
+    }
+    """,
+)
+
 _RECIPE_HISTORY = st.components.v2.component(
     "recipe_history",
     html='<div id="recipe-history-root"></div>',
@@ -364,7 +470,7 @@ ui_texts = {
         "feedback_email_invalid": "請輸入有效的聯絡信箱。",
         "btn_clear": "🔄 清除結果並重新上傳食材照片",
         "no_api": "⚠️ 偵測不到 `GEMINI_API_KEY` 環境變數，請確認系統已正確設定。",
-        "version_caption": "📌 App 版本：v1.0.4\n📌 目前語言：{language}\n📌 使用模型：{model}",
+        "version_caption": "📌 App 版本：v1.0.5\n📌 目前語言：{language}\n📌 使用模型：{model}",
         "history_title": "📚 已生成食譜",
         "history_retention": "記錄保留 90 天，到期後自動刪除。",
         "history_empty": "尚無已儲存的食譜。",
@@ -375,6 +481,8 @@ ui_texts = {
         "history_model_label": "模型",
         "history_recipe_fallback": "食譜記錄",
         "history_date_locale": "zh-TW",
+        "export_pdf": "📄 匯出 PDF / 列印",
+        "pdf_popup_blocked": "請允許此網站開啟彈出視窗，才能匯出 PDF。",
     },
     "English": {
         "title": "🍳 LAUS Refrigerator Leftover Chef",
@@ -405,7 +513,7 @@ ui_texts = {
         "feedback_email_invalid": "Please enter a valid contact email.",
         "btn_clear": "🔄 Clear and Upload New Photo",
         "no_api": "⚠️ `GEMINI_API_KEY` environment variable not detected.",
-        "version_caption": "📌 App Version: v1.0.4\n📌 Selected language: {language}\n📌 Model used: {model}",
+        "version_caption": "📌 App Version: v1.0.5\n📌 Selected language: {language}\n📌 Model used: {model}",
         "history_title": "📚 Generated recipes",
         "history_retention": "Saved for 90 days, then automatically deleted.",
         "history_empty": "No saved recipes yet.",
@@ -416,6 +524,8 @@ ui_texts = {
         "history_model_label": "Model",
         "history_recipe_fallback": "Saved recipe",
         "history_date_locale": "en-US",
+        "export_pdf": "📄 Export PDF / Print",
+        "pdf_popup_blocked": "Allow pop-ups for this site to export the PDF.",
     },
     "Japanese": {
         "title": "🍳 LAUS 冷蔵庫の余り物シェフ",
@@ -446,7 +556,7 @@ ui_texts = {
         "feedback_email_invalid": "有効なメールアドレスを入力してください。",
         "btn_clear": "🔄 クリアして写真を再アップロード",
         "no_api": "⚠️ `GEMINI_API_KEY` 環境変数が検出されません。",
-        "version_caption": "📌 アプリバージョン：v1.0.4\n📌 選択中の言語：{language}\n📌 使用モデル：{model}",
+        "version_caption": "📌 アプリバージョン：v1.0.5\n📌 選択中の言語：{language}\n📌 使用モデル：{model}",
         "history_title": "📚 生成したレシピ",
         "history_retention": "記録は90日間保存され、その後自動的に削除されます。",
         "history_empty": "保存されたレシピはありません。",
@@ -457,6 +567,8 @@ ui_texts = {
         "history_model_label": "モデル",
         "history_recipe_fallback": "保存したレシピ",
         "history_date_locale": "ja-JP",
+        "export_pdf": "📄 PDFをエクスポート / 印刷",
+        "pdf_popup_blocked": "PDFをエクスポートするには、このサイトのポップアップを許可してください。",
     },
     "Korean": {
         "title": "🍳 LAUS 냉장고 파먹기 셰프",
@@ -487,7 +599,7 @@ ui_texts = {
         "feedback_email_invalid": "올바른 이메일 주소를 입력해 주세요.",
         "btn_clear": "🔄 초기화 및 다시 업로드",
         "no_api": "⚠️ `GEMINI_API_KEY` 환경 변수를 찾을 수 없습니다.",
-        "version_caption": "📌 앱 버전: v1.0.4\n📌 선택한 언어: {language}\n📌 사용 모델: {model}",
+        "version_caption": "📌 앱 버전: v1.0.5\n📌 선택한 언어: {language}\n📌 사용 모델: {model}",
         "history_title": "📚 생성된 레시피",
         "history_retention": "기록은 90일 동안 저장되며 이후 자동으로 삭제됩니다.",
         "history_empty": "저장된 레시피가 없습니다.",
@@ -498,6 +610,8 @@ ui_texts = {
         "history_model_label": "모델",
         "history_recipe_fallback": "저장된 레시피",
         "history_date_locale": "ko-KR",
+        "export_pdf": "📄 PDF 내보내기 / 인쇄",
+        "pdf_popup_blocked": "PDF를 내보내려면 이 사이트의 팝업을 허용해 주세요.",
     }
 }
 
@@ -594,6 +708,7 @@ if "recipe_result" not in st.session_state:
     st.session_state.recipe_result = None
 if "stored_image" not in st.session_state:
     st.session_state.stored_image = None
+st.session_state.setdefault("recipe_image", None)
 st.session_state.setdefault("feedback_sent", False)
 
 # 檢查環境變數
@@ -651,7 +766,11 @@ else:
                             contents=[st.session_state.stored_image, prompt]
                         )
                         if response and response.text:
+                            recipe_image = encode_history_image(
+                                st.session_state.stored_image
+                            )
                             st.session_state.recipe_result = response.text
+                            st.session_state.recipe_image = recipe_image
                             st.session_state.current_model = model_name
                             st.session_state.pending_history_recipe = {
                                 "id": uuid.uuid4().hex,
@@ -659,7 +778,7 @@ else:
                                 "recipe": response.text,
                                 "language": selected_lang_label,
                                 "model": model_name,
-                                "image": encode_history_image(st.session_state.stored_image),
+                                "image": recipe_image,
                             }
                             render_version_caption()
                             st.session_state.feedback_sent = False
@@ -681,10 +800,42 @@ else:
         st.markdown("---")
         
         full_text = st.session_state.recipe_result
+        _RECIPE_PDF_EXPORT(
+            data={
+                "buttonLabel": t["export_pdf"],
+                "popupBlocked": t["pdf_popup_blocked"],
+                "title": t["title"],
+                "recipe": full_text,
+                "image": st.session_state.recipe_image,
+                "imageAlt": t["image_caption"],
+                "language": t["history_date_locale"],
+            },
+            key="recipe-pdf-export",
+        )
         
         # 分割菜色區段
         dish_pattern = r'(?m)(?=^#{1,3}\s*(?:Dish|菜色|料理|Recipe)\s*[1-3一二三一-三]|^[1-3][\.\、]\s*【)'
         sections = re.split(dish_pattern, full_text)
+        speech_settings = {
+            "Traditional Chinese": ("zh-TW", ("zh-TW", "zh-CN", "zh")),
+            "English": ("en-US", ("en-US", "en-GB", "en-AU", "en-CA")),
+            "Japanese": ("ja-JP", ("ja-JP", "ja")),
+            "Korean": ("ko-KR", ("ko-KR", "ko")),
+        }
+        lang_code, voice_languages = speech_settings[target_lang]
+
+        def render_audio_controls(text, key):
+            _RECIPE_AUDIO_CONTROLS(
+                data={
+                    "text": text,
+                    "lang": lang_code,
+                    "voiceLanguages": voice_languages,
+                    "voiceMissing": t["tts_voice_missing"],
+                    "playLabel": t["tts_play"],
+                    "stopLabel": t["tts_stop"],
+                },
+                key=key,
+            )
         
         # 1. 顯示食材清單與導言
         if len(sections) > 0 and sections[0].strip():
@@ -699,10 +850,7 @@ else:
                 continue
             
             dish_count += 1
-            
-            # 顯示該道菜完整 Markdown
-            st.markdown(clean_section)
-            
+
             # 清理純文字
             plain_text = (
                 clean_section.replace('\\', '')
@@ -714,30 +862,24 @@ else:
                 .replace('\n', ' ')
                 .replace('\r', '')
             )
-            
-            speech_settings = {
-                "Traditional Chinese": ("zh-TW", ("zh-TW", "zh-CN", "zh")),
-                "English": ("en-US", ("en-US", "en-GB", "en-AU", "en-CA")),
-                "Japanese": ("ja-JP", ("ja-JP", "ja")),
-                "Korean": ("ko-KR", ("ko-KR", "ko")),
-            }
-            lang_code, voice_languages = speech_settings[target_lang]
-            
-            _RECIPE_AUDIO_CONTROLS(
-                data={
-                    "text": plain_text,
-                    "lang": lang_code,
-                    "voiceLanguages": voice_languages,
-                    "voiceMissing": t["tts_voice_missing"],
-                    "playLabel": t["tts_play"],
-                    "stopLabel": t["tts_stop"],
-                },
-                key=f"recipe-audio-{dish_count}",
-            )
+
+            render_audio_controls(plain_text, f"recipe-audio-{dish_count}")
+            st.markdown(clean_section)
             
             st.markdown("---")
 
         if dish_count == 0:
+            plain_text = (
+                full_text.replace('\\', '')
+                .replace('`', '')
+                .replace('"', ' ')
+                .replace("'", " ")
+                .replace('*', '')
+                .replace('#', '')
+                .replace('\n', ' ')
+                .replace('\r', '')
+            )
+            render_audio_controls(plain_text, "recipe-audio-full")
             st.markdown(full_text)
 
         if dish_count > 0:
@@ -808,6 +950,7 @@ else:
         # 清除重置按鈕
         if st.button(t["btn_clear"]):
             st.session_state.recipe_result = None
+            st.session_state.recipe_image = None
             st.session_state.current_model = ""
             st.session_state.stored_image = None
             st.session_state.feedback_sent = False
