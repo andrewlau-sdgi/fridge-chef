@@ -438,6 +438,16 @@ _RECIPE_HISTORY = st.components.v2.component(
 
 # 頁面基本設定
 st.set_page_config(page_title="LAUS 冰箱剩食食譜大廚", page_icon="🍳", layout="centered")
+st.markdown(
+    """
+    <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # --- 1. 多國語言介面字典 (UI Dictionary) ---
 ui_texts = {
@@ -470,7 +480,7 @@ ui_texts = {
         "feedback_email_invalid": "請輸入有效的聯絡信箱。",
         "btn_clear": "🔄 清除結果並重新上傳食材照片",
         "no_api": "⚠️ 偵測不到 `GEMINI_API_KEY` 環境變數，請確認系統已正確設定。",
-        "version_caption": "📌 App 版本：v1.0.5\n📌 目前語言：{language}\n📌 使用模型：{model}",
+        "version_caption": "📌 App 版本：v1.0.6\n📌 目前語言：{language}\n📌 使用模型：{model}",
         "history_title": "📚 已生成食譜",
         "history_retention": "記錄保留 90 天，到期後自動刪除。",
         "history_empty": "尚無已儲存的食譜。",
@@ -513,7 +523,7 @@ ui_texts = {
         "feedback_email_invalid": "Please enter a valid contact email.",
         "btn_clear": "🔄 Clear and Upload New Photo",
         "no_api": "⚠️ `GEMINI_API_KEY` environment variable not detected.",
-        "version_caption": "📌 App Version: v1.0.5\n📌 Selected language: {language}\n📌 Model used: {model}",
+        "version_caption": "📌 App Version: v1.0.6\n📌 Selected language: {language}\n📌 Model used: {model}",
         "history_title": "📚 Generated recipes",
         "history_retention": "Saved for 90 days, then automatically deleted.",
         "history_empty": "No saved recipes yet.",
@@ -556,7 +566,7 @@ ui_texts = {
         "feedback_email_invalid": "有効なメールアドレスを入力してください。",
         "btn_clear": "🔄 クリアして写真を再アップロード",
         "no_api": "⚠️ `GEMINI_API_KEY` 環境変数が検出されません。",
-        "version_caption": "📌 アプリバージョン：v1.0.5\n📌 選択中の言語：{language}\n📌 使用モデル：{model}",
+        "version_caption": "📌 アプリバージョン：v1.0.6\n📌 選択中の言語：{language}\n📌 使用モデル：{model}",
         "history_title": "📚 生成したレシピ",
         "history_retention": "記録は90日間保存され、その後自動的に削除されます。",
         "history_empty": "保存されたレシピはありません。",
@@ -599,7 +609,7 @@ ui_texts = {
         "feedback_email_invalid": "올바른 이메일 주소를 입력해 주세요.",
         "btn_clear": "🔄 초기화 및 다시 업로드",
         "no_api": "⚠️ `GEMINI_API_KEY` 환경 변수를 찾을 수 없습니다.",
-        "version_caption": "📌 앱 버전: v1.0.5\n📌 선택한 언어: {language}\n📌 사용 모델: {model}",
+        "version_caption": "📌 앱 버전: v1.0.6\n📌 선택한 언어: {language}\n📌 사용 모델: {model}",
         "history_title": "📚 생성된 레시피",
         "history_retention": "기록은 90일 동안 저장되며 이후 자동으로 삭제됩니다.",
         "history_empty": "저장된 레시피가 없습니다.",
