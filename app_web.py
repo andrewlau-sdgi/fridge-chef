@@ -443,7 +443,7 @@ st.markdown(
     <style>
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        header [data-testid="stBaseButton-header"] {display: none;}
+        [data-testid="stToolbarActions"] {display: none;}
     </style>
     """,
     unsafe_allow_html=True,
