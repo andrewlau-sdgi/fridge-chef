@@ -1,5 +1,6 @@
 import base64
 from io import BytesIO
+import logging
 import os
 import re
 import smtplib
@@ -11,6 +12,7 @@ from html import escape
 
 import streamlit as st
 from google import genai
+from google.genai import errors as genai_errors
 from PIL import Image, ImageOps
 
 
@@ -18,9 +20,16 @@ candidate_models = [
     "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
-    "gemini-2.5-flash",
-    "gemini-1.5-flash",
 ]
+
+
+def get_available_candidate_models(client):
+    available_models = {
+        model.name.rsplit("/", 1)[-1]
+        for model in client.models.list()
+        if model.name and "generateContent" in (model.supported_actions or [])
+    }
+    return [model for model in candidate_models if model in available_models]
 
 
 def send_feedback_email(rating, comment, contact_email, language):
@@ -462,6 +471,11 @@ ui_texts = {
         "btn_generate": "🤖 請 LAUS 大廚開立今晚食譜",
         "spinner": "LAUS 大廚正在智慧切換可用模型並調配食譜中...",
         "success_msg": "✨ LAUS 冰箱大廚的今晚特餐建議出爐囉！",
+        "model_list_error": "目前無法確認可用的食譜模型，請稍後再試。如果問題持續，請聯絡管理員。",
+        "no_available_models": "目前沒有可用的食譜模型。請稍後再試，或聯絡管理員確認 API 模型存取權限。",
+        "model_access_error": "目前無法連線至食譜服務。請稍後再試，或聯絡管理員確認 API 設定。",
+        "model_quota_error": "食譜服務目前忙碌或已達使用上限。請稍候幾分鐘後再試。",
+        "recipe_error": "暫時無法產生食譜。請稍後再試；您上傳的照片仍保留，可以直接重試。如問題持續，請聯絡管理員。",
         "tts_play": "▶ 播放此道菜語音",
         "tts_stop": "⏹ 停止",
         "tts_voice_missing": "找不到所選語言的語音，請在系統語音設定中安裝中文（台灣）語音。",
@@ -505,6 +519,11 @@ ui_texts = {
         "btn_generate": "🤖 Ask Chef LAUS for Tonight's Recipe",
         "spinner": "Chef LAUS is auto-detecting available models...",
         "success_msg": "✨ Chef LAUS's special recipes are ready!",
+        "model_list_error": "We couldn't check which recipe models are available. Please try again shortly. Contact the administrator if this continues.",
+        "no_available_models": "No recipe models are currently available. Please try again later or ask the administrator to check API model access.",
+        "model_access_error": "The recipe service couldn't be reached. Please try again later or ask the administrator to check the API configuration.",
+        "model_quota_error": "The recipe service is busy or has reached its usage limit. Please wait a few minutes and try again.",
+        "recipe_error": "We couldn't create your recipes just now. Please try again shortly; your uploaded photo is still available. Contact the administrator if this continues.",
         "tts_play": "▶ Play Audio",
         "tts_stop": "⏹ Stop",
         "tts_voice_missing": "No matching speech voice is installed. Install a voice for the selected language in your system settings.",
@@ -548,6 +567,11 @@ ui_texts = {
         "btn_generate": "🤖 LAUSシェフに今夜のレシピを頼む",
         "spinner": "利用可能なモデルを自動検出してレシピを作成中...",
         "success_msg": "✨ LAUSシェフ特製のレシピが完成しました！",
+        "model_list_error": "利用可能なレシピモデルを確認できませんでした。しばらくしてから再度お試しください。問題が続く場合は管理者にお問い合わせください。",
+        "no_available_models": "現在利用できるレシピモデルがありません。後でもう一度お試しいただくか、管理者に API モデルへのアクセスを確認してください。",
+        "model_access_error": "レシピサービスに接続できませんでした。後でもう一度お試しいただくか、管理者に API 設定を確認してください。",
+        "model_quota_error": "レシピサービスが混み合っているか、利用上限に達しました。数分後にもう一度お試しください。",
+        "recipe_error": "ただいまレシピを作成できませんでした。写真はそのまま残っていますので、しばらくしてから再度お試しください。問題が続く場合は管理者にお問い合わせください。",
         "tts_play": "▶ 音声を再生",
         "tts_stop": "⏹ 停止",
         "tts_voice_missing": "選択した言語の音声がありません。システム設定で対応する音声をインストールしてください。",
@@ -591,6 +615,11 @@ ui_texts = {
         "btn_generate": "🤖 LAUS 셰프에게 오늘 저녁 레시피 요청하기",
         "spinner": "사용 가능한 모델을 자동 감지하여 레시피를 구성 중입니다...",
         "success_msg": "✨ LAUS 셰프의 특선 레시피가 준비되었습니다!",
+        "model_list_error": "사용 가능한 레시피 모델을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요. 문제가 계속되면 관리자에게 문의해 주세요.",
+        "no_available_models": "현재 사용 가능한 레시피 모델이 없습니다. 나중에 다시 시도하거나 관리자에게 API 모델 접근 권한을 확인해 주세요.",
+        "model_access_error": "레시피 서비스에 연결할 수 없습니다. 나중에 다시 시도하거나 관리자에게 API 설정을 확인해 주세요.",
+        "model_quota_error": "레시피 서비스가 혼잡하거나 사용 한도에 도달했습니다. 몇 분 후 다시 시도해 주세요.",
+        "recipe_error": "지금은 레시피를 만들 수 없습니다. 업로드한 사진은 그대로 유지되니 잠시 후 다시 시도해 주세요. 문제가 계속되면 관리자에게 문의해 주세요.",
         "tts_play": "▶ 음성 재생",
         "tts_stop": "⏹ 정지",
         "tts_voice_missing": "선택한 언어의 음성이 없습니다. 시스템 설정에서 해당 음성을 설치해 주세요.",
@@ -745,8 +774,18 @@ else:
             render_version_caption()
             with st.spinner(t["spinner"]):
                 success = False
-                last_error = None
-                client = genai.Client()
+                failure_message = None
+                try:
+                    client = genai.Client()
+                    available_models = get_available_candidate_models(client)
+                except genai_errors.APIError:
+                    logging.exception("Unable to retrieve available Gemini models")
+                    failure_message = t["model_list_error"]
+                    available_models = []
+                except Exception:
+                    logging.exception("Unable to initialize Gemini model discovery")
+                    failure_message = t["model_list_error"]
+                    available_models = []
                 
                 prompt = f"""
                 You are a professional, humorous, and resourceful refrigerator leftover cooking chef named LAUS.
@@ -768,8 +807,11 @@ else:
                 CRITICAL CONSTRAINT: You MUST write your ENTIRE response in **{target_lang}**.
                 """
                 
-                # 自動走訪備援清單，尋找當下可用的模型
-                for model_name in candidate_models:
+                if not failure_message and not available_models:
+                    failure_message = t["no_available_models"]
+
+                unavailable_model_count = 0
+                for model_name in available_models:
                     try:
                         response = client.models.generate_content(
                             model=model_name,
@@ -794,13 +836,34 @@ else:
                             st.session_state.feedback_sent = False
                             success = True
                             break
-                    except Exception as e:
-                        last_error = e
-                        time.sleep(1)
-                        continue
-                
+                    except genai_errors.APIError as error:
+                        logging.warning(
+                            "Gemini generation failed for %s (HTTP %s)",
+                            model_name,
+                            error.code,
+                        )
+                        if error.code == 404:
+                            unavailable_model_count += 1
+                            continue
+                        if error.code in (401, 403):
+                            failure_message = t["model_access_error"]
+                            break
+                        if error.code == 429:
+                            failure_message = t["model_quota_error"]
+                            break
+                    except Exception:
+                        logging.exception(
+                            "Unexpected Gemini generation failure for %s",
+                            model_name,
+                        )
+
                 if not success:
-                    st.error(f"所有可用模型目前皆繁忙或發生錯誤，請稍後再試。\n詳細錯誤：{last_error}")
+                    if failure_message is None:
+                        if unavailable_model_count == len(available_models):
+                            failure_message = t["no_available_models"]
+                        else:
+                            failure_message = t["recipe_error"]
+                    st.info(failure_message, icon="ℹ️")
                 else:
                     st.rerun()
 
