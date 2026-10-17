@@ -986,7 +986,8 @@ else:
     st.markdown(f"**{t['upload_instruction']}**")
 
     uploaded_file = st.file_uploader(
-        label="",
+        label=t["upload_instruction"],
+        label_visibility="collapsed",
         type=["jpg", "jpeg", "png", "heic"]
     )
 
