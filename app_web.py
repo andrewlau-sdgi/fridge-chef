@@ -19,7 +19,7 @@ from google.genai import types as genai_types
 from PIL import Image, ImageOps
 
 
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.8"
 RECIPE_REQUEST_TIMEOUT_MS = 180_000
 DISH_PREVIEW_TIMEOUT_SECONDS = 120
 
@@ -155,6 +155,13 @@ def render_dish_preview_progress():
         )
     )
     if completed_count < total_count:
+        if st.button(
+            t["preview_stop"],
+            help=t["preview_stop_help"],
+            key="stop_dish_preview_generation",
+        ):
+            stop_dish_preview_generation()
+            st.rerun()
         return
 
     previews = []
@@ -179,6 +186,7 @@ def render_dish_preview_progress():
     st.session_state.recipe_dish_preview_futures = []
     st.session_state.recipe_preview_sections = []
     st.session_state.recipe_previews_pending = False
+    st.session_state.recipe_previews_stopped = False
     finalize_recipe_generation()
     st.session_state.recipe_generation_in_progress = False
     preview_status.update(
@@ -621,6 +629,9 @@ ui_texts = {
         "preview_generating": "正在自動產生三道菜的 AI 預覽圖...",
         "preview_progress": "已完成 {completed} / {total} 道菜的 AI 預覽圖...",
         "preview_error": "目前無法產生這道菜的 AI 預覽圖。",
+        "preview_stop": "⏹ 停止 AI 預覽圖",
+        "preview_stop_help": "停止等待預覽圖；已送出的生成請求可能仍會在背景完成。",
+        "preview_stopped": "已停止產生 AI 預覽圖。",
         "generation_duration_footnote": "食譜生成耗時：{duration}",
         "duration_format": "{minutes} 分 {seconds} 秒",
         "btn_generate": "🤖 請 LAUS 大廚開立今晚食譜",
@@ -679,6 +690,9 @@ ui_texts = {
         "preview_generating": "Automatically generating AI previews for the dishes...",
         "preview_progress": "Generated {completed} of {total} dish previews...",
         "preview_error": "An AI preview could not be generated for this dish.",
+        "preview_stop": "⏹ Stop AI previews",
+        "preview_stop_help": "Stop waiting for previews. Requests already sent may still finish in the background.",
+        "preview_stopped": "AI preview generation was stopped.",
         "generation_duration_footnote": "Recipe generation time: {duration}",
         "duration_format": "{minutes}m {seconds}s",
         "btn_generate": "🤖 Ask Chef LAUS for Tonight's Recipe",
@@ -737,6 +751,9 @@ ui_texts = {
         "preview_generating": "料理のAIプレビューを自動生成しています...",
         "preview_progress": "{total}品中{completed}品のAIプレビューを生成しました...",
         "preview_error": "この料理のAIプレビューを生成できませんでした。",
+        "preview_stop": "⏹ AIプレビューを停止",
+        "preview_stop_help": "プレビューの待機を停止します。送信済みの生成リクエストはバックグラウンドで完了する場合があります。",
+        "preview_stopped": "AIプレビューの生成を停止しました。",
         "generation_duration_footnote": "レシピ生成時間：{duration}",
         "duration_format": "{minutes}分 {seconds}秒",
         "btn_generate": "🤖 LAUSシェフに今夜のレシピを頼む",
@@ -795,6 +812,9 @@ ui_texts = {
         "preview_generating": "요리의 AI 미리보기를 자동 생성하고 있습니다...",
         "preview_progress": "{total}개 중 {completed}개 요리의 AI 미리보기를 생성했습니다...",
         "preview_error": "이 요리의 AI 미리보기 이미지를 만들 수 없습니다.",
+        "preview_stop": "⏹ AI 미리보기 중지",
+        "preview_stop_help": "미리보기 대기를 중지합니다. 이미 전송된 생성 요청은 백그라운드에서 완료될 수 있습니다.",
+        "preview_stopped": "AI 미리보기 생성을 중지했습니다.",
         "generation_duration_footnote": "레시피 생성 시간: {duration}",
         "duration_format": "{minutes}분 {seconds}초",
         "btn_generate": "🤖 LAUS 셰프에게 오늘 저녁 레시피 요청하기",
@@ -952,6 +972,7 @@ st.session_state.setdefault("recipe_dish_preview_futures", [])
 st.session_state.setdefault("recipe_generation_duration", None)
 st.session_state.setdefault("recipe_preview_sections", [])
 st.session_state.setdefault("recipe_previews_pending", False)
+st.session_state.setdefault("recipe_previews_stopped", False)
 st.session_state.setdefault("recipe_generation_started_at", None)
 st.session_state.setdefault("recipe_generation_language", "")
 st.session_state.setdefault("recipe_generation_in_progress", False)
@@ -974,9 +995,24 @@ def start_recipe_generation():
     st.session_state.recipe_dish_preview_futures = []
     st.session_state.recipe_preview_sections = []
     st.session_state.recipe_previews_pending = False
+    st.session_state.recipe_previews_stopped = False
     st.session_state.recipe_generation_duration = None
     st.session_state.pending_history_recipe = None
     st.session_state.feedback_sent = False
+
+
+def stop_dish_preview_generation():
+    for future in st.session_state.recipe_dish_preview_futures:
+        future.cancel()
+    st.session_state.recipe_dish_preview_futures = []
+    st.session_state.recipe_previews_pending = False
+    st.session_state.recipe_previews_stopped = True
+    st.session_state.recipe_generation_in_progress = False
+    if (
+        st.session_state.recipe_result is not None
+        and st.session_state.recipe_generation_started_at is not None
+    ):
+        finalize_recipe_generation()
 
 
 # 檢查環境變數
@@ -1292,6 +1328,8 @@ else:
                     else:
                         if st.session_state.recipe_previews_pending:
                             st.info(t["preview_generating"], icon="ℹ️")
+                        elif st.session_state.recipe_previews_stopped:
+                            st.info(t["preview_stopped"], icon="ℹ️")
                         else:
                             st.info(t["preview_error"], icon="ℹ️")
                 with audio_col:
@@ -1397,16 +1435,19 @@ else:
 
         # 清除重置按鈕
         if st.button(t["btn_clear"]):
+            stop_dish_preview_generation()
             st.session_state.recipe_result = None
             st.session_state.recipe_image = None
             st.session_state.recipe_dish_previews = []
-            st.session_state.recipe_dish_preview_futures = []
             st.session_state.recipe_preview_sections = []
-            st.session_state.recipe_previews_pending = False
+            st.session_state.recipe_previews_stopped = False
+            st.session_state.recipe_generation_in_progress = False
+            st.session_state.recipe_generation_requested = False
             st.session_state.recipe_generation_duration = None
             st.session_state.recipe_generation_started_at = None
             st.session_state.recipe_generation_language = ""
             st.session_state.current_model = ""
+            st.session_state.pending_history_recipe = None
             st.session_state.stored_image = None
             st.session_state.feedback_sent = False
             st.rerun()
