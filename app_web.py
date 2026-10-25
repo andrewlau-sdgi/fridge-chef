@@ -19,7 +19,7 @@ from google.genai import types as genai_types
 from PIL import Image, ImageOps
 
 
-APP_VERSION = "1.0.8"
+APP_VERSION = "1.0.9"
 RECIPE_REQUEST_TIMEOUT_MS = 180_000
 DISH_PREVIEW_TIMEOUT_SECONDS = 120
 
@@ -165,24 +165,40 @@ def render_dish_preview_progress():
         return
 
     previews = []
+    preview_errors = []
     for dish_number, future in enumerate(preview_futures, start=1):
         try:
             previews.append(future.result())
+            preview_errors.append(None)
         except genai_errors.APIError as error:
             logging.warning(
-                "Dish preview generation failed for dish %s (HTTP %s)",
+                "Dish preview generation failed for dish %s with model %s (HTTP %s)",
                 dish_number,
+                RECIPE_IMAGE_MODEL,
                 error.code,
             )
             previews.append(None)
-        except Exception:
+            preview_errors.append(
+                format_error_detail(
+                    f"Dish preview generation failed for dish {dish_number}.",
+                    error,
+                )
+            )
+        except Exception as error:
             logging.exception(
                 "Unexpected dish preview generation failure for dish %s",
                 dish_number,
             )
             previews.append(None)
+            preview_errors.append(
+                format_error_detail(
+                    f"Dish preview generation failed for dish {dish_number}.",
+                    error,
+                )
+            )
 
     st.session_state.recipe_dish_previews = previews
+    st.session_state.recipe_dish_preview_errors = preview_errors
     st.session_state.recipe_dish_preview_futures = []
     st.session_state.recipe_preview_sections = []
     st.session_state.recipe_previews_pending = False
@@ -626,6 +642,7 @@ ui_texts = {
         "preview_caption": "AI 成果預覽（僅供參考）",
         "preview_option": "產生每道菜的 AI 預覽圖",
         "preview_option_help": "勾選後會為每道菜產生 AI 預覽圖，整體等待時間會較長。",
+        "preview_error_details": "預覽圖生成錯誤詳情",
         "preview_generating": "正在自動產生三道菜的 AI 預覽圖...",
         "preview_progress": "已完成 {completed} / {total} 道菜的 AI 預覽圖...",
         "preview_error": "目前無法產生這道菜的 AI 預覽圖。",
@@ -687,6 +704,7 @@ ui_texts = {
         "preview_caption": "AI dish preview (for reference)",
         "preview_option": "Generate AI previews for each dish",
         "preview_option_help": "When checked, AI preview images are generated for each dish and the overall wait will be longer.",
+        "preview_error_details": "Preview generation error details",
         "preview_generating": "Automatically generating AI previews for the dishes...",
         "preview_progress": "Generated {completed} of {total} dish previews...",
         "preview_error": "An AI preview could not be generated for this dish.",
@@ -748,6 +766,7 @@ ui_texts = {
         "preview_caption": "AI料理イメージ（参考）",
         "preview_option": "各料理のAIプレビューを生成",
         "preview_option_help": "チェックすると各料理のAIプレビュー画像を生成するため、全体の待ち時間が長くなります。",
+        "preview_error_details": "プレビュー生成エラーの詳細",
         "preview_generating": "料理のAIプレビューを自動生成しています...",
         "preview_progress": "{total}品中{completed}品のAIプレビューを生成しました...",
         "preview_error": "この料理のAIプレビューを生成できませんでした。",
@@ -809,6 +828,7 @@ ui_texts = {
         "preview_caption": "AI 요리 미리보기 (참고용)",
         "preview_option": "각 요리의 AI 미리보기 생성",
         "preview_option_help": "선택하면 각 요리의 AI 미리보기 이미지를 생성하므로 전체 대기 시간이 길어집니다.",
+        "preview_error_details": "미리보기 생성 오류 세부정보",
         "preview_generating": "요리의 AI 미리보기를 자동 생성하고 있습니다...",
         "preview_progress": "{total}개 중 {completed}개 요리의 AI 미리보기를 생성했습니다...",
         "preview_error": "이 요리의 AI 미리보기 이미지를 만들 수 없습니다.",
@@ -968,6 +988,7 @@ if "stored_image" not in st.session_state:
     st.session_state.stored_image = None
 st.session_state.setdefault("recipe_image", None)
 st.session_state.setdefault("recipe_dish_previews", [])
+st.session_state.setdefault("recipe_dish_preview_errors", [])
 st.session_state.setdefault("recipe_dish_preview_futures", [])
 st.session_state.setdefault("recipe_generation_duration", None)
 st.session_state.setdefault("recipe_preview_sections", [])
@@ -992,6 +1013,7 @@ def start_recipe_generation():
     st.session_state.recipe_result = None
     st.session_state.recipe_image = None
     st.session_state.recipe_dish_previews = []
+    st.session_state.recipe_dish_preview_errors = []
     st.session_state.recipe_dish_preview_futures = []
     st.session_state.recipe_preview_sections = []
     st.session_state.recipe_previews_pending = False
@@ -1047,7 +1069,7 @@ else:
         with preview_option_col:
             generate_previews = st.checkbox(
                 t["preview_option"],
-                value=True,
+                value=False,
                 key="generate_dish_previews",
                 help=t["preview_option_help"],
                 disabled=st.session_state.recipe_generation_in_progress,
@@ -1130,6 +1152,9 @@ else:
                             st.session_state.recipe_result = response.text
                             st.session_state.recipe_image = recipe_image
                             st.session_state.recipe_dish_previews = [
+                                None
+                            ] * len(preview_sections)
+                            st.session_state.recipe_dish_preview_errors = [
                                 None
                             ] * len(preview_sections)
                             st.session_state.recipe_preview_sections = (
@@ -1332,6 +1357,19 @@ else:
                             st.info(t["preview_stopped"], icon="ℹ️")
                         else:
                             st.info(t["preview_error"], icon="ℹ️")
+                            if (
+                                dish_count
+                                <= len(st.session_state.recipe_dish_preview_errors)
+                                and st.session_state.recipe_dish_preview_errors[
+                                    dish_count - 1
+                                ]
+                            ):
+                                with st.expander(t["preview_error_details"]):
+                                    st.code(
+                                        st.session_state.recipe_dish_preview_errors[
+                                            dish_count - 1
+                                        ]
+                                    )
                 with audio_col:
                     render_audio_controls(plain_text, f"recipe-audio-{dish_count}")
             else:
@@ -1439,6 +1477,7 @@ else:
             st.session_state.recipe_result = None
             st.session_state.recipe_image = None
             st.session_state.recipe_dish_previews = []
+            st.session_state.recipe_dish_preview_errors = []
             st.session_state.recipe_preview_sections = []
             st.session_state.recipe_previews_stopped = False
             st.session_state.recipe_generation_in_progress = False
